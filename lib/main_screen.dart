@@ -35,13 +35,14 @@ class MotorController extends StatefulWidget {
 }
 
 class _MotorControllerState extends State<MotorController> {
+  bool isAlertOn = false;
   //Bluetooth config
   FlutterBlue flutterBlue = FlutterBlue.instance;
   late BluetoothDevice device;
   late BluetoothCharacteristic characteristic;
-  final String DEVICE_NAME = "ESP32_Device";
-  final String SERVICE_UUID = '';
-  final String CHARACTERISTIC_UUID = '';
+  final String DEVICE_NAME = "ESP32_Motor";
+  final String SERVICE_UUID = '29b8e60c-b575-47ab-b38f-e74f676df270';
+  final String CHARACTERISTIC_UUID = 'bd91b3b6-82be-480a-ace2-0f97b1b081e3';
 
   bool isManual = false; // mode
   Color circleColor = Colors.yellow;
@@ -50,7 +51,7 @@ class _MotorControllerState extends State<MotorController> {
   Icon dynamicIcon = const Icon(Icons.play_arrow_rounded, size: 30,);
   String status = 'Stopped'; // motor
   String action = 'None';
-  bool fLimit = true;
+  bool fLimit = false;
   bool rLimit = false;
 
 
@@ -61,33 +62,38 @@ class _MotorControllerState extends State<MotorController> {
   }
   void checkBluetoothStatus() async {
     FlutterBlue flutterBlue = FlutterBlue.instance;
-    await flutterBlue.isOn.then((value) {
-      if(!value){
-        showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return const AlertDialog(
-              title: Text('Bluetooth Error'),
-              content: Text('Please turn on Bluetooth to use this app.'),
-            );
-          },
-        );
-      }
-      else if (value){
-      }
-    });
+
+    bool isBluetoothOn = await flutterBlue.isOn;
+    if (!isBluetoothOn) {
+      isAlertOn = true;
+      showBluetoothOffAlert();
+    }
 
     flutterBlue.state.listen((state) {
       if (state == BluetoothState.on) {
-        Navigator.of(context).pop();
+        if (isAlertOn) {
+          Navigator.of(context).pop();
+        }
         initBlue();
       }
     });
   }
 
+  void showBluetoothOffAlert() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          title: Text('Bluetooth Error'),
+          content: Text('Please turn on Bluetooth to use this app.'),
+        );
+      },
+    );
+  }
+
+
   void initBlue() {
-    print('print: scan started');
     flutterBlue.startScan().onError((error, stackTrace) {
       ScaffoldMessenger.of(context).showSnackBar( SnackBar(
         content: Text('Error while scanning devices!', style: GoogleFonts.poppins(textStyle: const TextStyle(color: Colors.white)),),
@@ -97,10 +103,6 @@ class _MotorControllerState extends State<MotorController> {
     });
 
     flutterBlue.scanResults.listen((results) {
-      for (var result in results){
-        print('DEVICE');
-        print(result.device.name);
-      }
       // Find the ESP32_Device
       for (var result in results) {
         if (result.device.name == DEVICE_NAME) {
@@ -156,12 +158,16 @@ class _MotorControllerState extends State<MotorController> {
                           });
                           if(isManual){
                             // TODO: Manual mode
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
+                            sendData(data);
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                               content: Text('Manual Mode'),
                               duration: Duration(seconds: 1),
                             ));
                           } else {
                             // TODO: Auto mode
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
+                            sendData(data);
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                               content: Text('Auto Mode'),
                               duration: Duration(seconds: 1),
@@ -199,6 +205,8 @@ class _MotorControllerState extends State<MotorController> {
                             action = 'Reverse';
                             fLimit = false;
                           });
+                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
+                          sendData(data);
                         }
                       },
                       onLongPressEnd: rLimit ? null : (details) {
@@ -206,6 +214,8 @@ class _MotorControllerState extends State<MotorController> {
                           setState(() {
                             action = 'None';
                           });
+                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
+                          sendData(data);
                         }
                       },
                       child: FloatingActionButton(
@@ -217,6 +227,8 @@ class _MotorControllerState extends State<MotorController> {
                               action = 'Reverse';
                               fLimit = false;
                             });
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
+                            sendData(data);
                           }
                         },
                         child: Icon(Icons.arrow_upward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
@@ -238,6 +250,20 @@ class _MotorControllerState extends State<MotorController> {
                               circleColor = Colors.green;
                             }
                           });
+                          var mode = '';
+                          if (isManual){
+                            mode = 'Manual';
+                          } else {
+                            mode = 'Auto';
+                          }
+                          if(status == 'Started'){
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, mode);
+                            sendData(data);
+                          } else if(status == 'Stopped'){
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, mode);
+                            sendData(data);
+                          }
+
                         },
                         child: dynamicIcon
                     ),
@@ -249,6 +275,8 @@ class _MotorControllerState extends State<MotorController> {
                             action = 'Forward';
                             rLimit = false;
                           });
+                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
+                          sendData(data);
                         }
                       },
                       onLongPressEnd: fLimit ? null : (details) {
@@ -256,6 +284,8 @@ class _MotorControllerState extends State<MotorController> {
                           setState(() {
                             action = 'None';
                           });
+                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
+                          sendData(data);
                         }
                       },
                       child: FloatingActionButton(
@@ -267,6 +297,8 @@ class _MotorControllerState extends State<MotorController> {
                               action = 'Forward';
                               rLimit = false;
                             });
+                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
+                            sendData(data);
                           }
                         },
                         child: Icon(Icons.arrow_downward_rounded, color: fLimit ? Colors.grey[700]:Colors.black,),
@@ -284,7 +316,12 @@ class _MotorControllerState extends State<MotorController> {
 
   void connectToDevice() async {
     try {
-      await device.connect();
+      await device.connect().then((value) {
+        ScaffoldMessenger.of(context).showSnackBar( SnackBar(
+          content: Text('Successfully Connected to $DEVICE_NAME'),
+          duration: const Duration(seconds: 1),
+        ));
+      });
       discoverServices();
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar( SnackBar(
@@ -325,17 +362,16 @@ class _MotorControllerState extends State<MotorController> {
   }
 
   void sendData(DataPacket data) {
-    characteristic.write(data.toBytes(), withoutResponse: true).whenComplete((){
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Data Sent!"),
-        duration: Duration(seconds: 1),
-      ));
-    }).onError((error, stackTrace) {
+    characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error.toString()),
         duration: const Duration(seconds: 1),
       ));
     });
+
+
   }
+
+
 
 }
