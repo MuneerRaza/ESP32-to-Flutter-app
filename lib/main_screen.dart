@@ -12,9 +12,7 @@ class DataPacket {
 
   DataPacket(this.action, this.motor, this.rLimit, this.fLimit, this.mode);
 
-  // Constructor to create a DataPacket from a list of bytes
   factory DataPacket.fromBytes(List<int> bytes) {
-    // Decode the bytes into individual properties (adjust based on your encoding logic)
     String action = utf8.decode(bytes.sublist(0, 10));
     String motor = utf8.decode(bytes.sublist(10, 20));
     bool rLimit = bytes[20] == 1;
@@ -23,9 +21,7 @@ class DataPacket {
     return DataPacket(action, motor, rLimit, fLimit, mode);
   }
 
-  // Convert DataPacket properties into a list of bytes
   List<int> toBytes() {
-    // Encode properties into bytes (adjust based on your encoding logic)
     List<int> bytes = utf8.encode(action) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
     return bytes;
   }
@@ -61,14 +57,50 @@ class _MotorControllerState extends State<MotorController> {
   @override
   void initState() {
     super.initState();
-    flutterBlue.startScan().onError((error, stackTrace) {
-    ScaffoldMessenger.of(context).showSnackBar( SnackBar(
-    content: Text(error.toString()),
-    duration: const Duration(seconds: 1),
-    ));
+    checkBluetoothStatus();
+  }
+  void checkBluetoothStatus() async {
+    FlutterBlue flutterBlue = FlutterBlue.instance;
+    await flutterBlue.isOn.then((value) {
+      if(!value){
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return const AlertDialog(
+              title: Text('Bluetooth Error'),
+              content: Text('Please turn on Bluetooth to use this app.'),
+            );
+          },
+        );
+      }
+      else if (value){
+      }
     });
+
+    flutterBlue.state.listen((state) {
+      if (state == BluetoothState.on) {
+        Navigator.of(context).pop();
+        initBlue();
+      }
+    });
+  }
+
+  void initBlue() {
+    print('print: scan started');
+    flutterBlue.startScan().onError((error, stackTrace) {
+      ScaffoldMessenger.of(context).showSnackBar( SnackBar(
+        content: Text('Error while scanning devices!', style: GoogleFonts.poppins(textStyle: const TextStyle(color: Colors.white)),),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 1),
+      ));
+    });
+
     flutterBlue.scanResults.listen((results) {
-      print(results);
+      for (var result in results){
+        print('DEVICE');
+        print(result.device.name);
+      }
       // Find the ESP32_Device
       for (var result in results) {
         if (result.device.name == DEVICE_NAME) {
@@ -77,7 +109,9 @@ class _MotorControllerState extends State<MotorController> {
         }
       }
     });
+
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -252,9 +286,9 @@ class _MotorControllerState extends State<MotorController> {
     try {
       await device.connect();
       discoverServices();
-      } catch (error) {
+    } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar( SnackBar(
-        content: Text(error.toString()),
+        content: Text('Error occur while connecting to $DEVICE_NAME'),
         duration: const Duration(seconds: 1),
       ));
     }
@@ -303,6 +337,5 @@ class _MotorControllerState extends State<MotorController> {
       ));
     });
   }
-
 
 }
