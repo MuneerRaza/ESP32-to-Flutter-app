@@ -4,25 +4,25 @@ import 'dart:convert';
 import 'package:flutter_blue/flutter_blue.dart';
 
 class DataPacket {
-  String action;
+  String stepperAction;
   String motor;
   bool rLimit;
   bool fLimit;
   String mode;
 
-  DataPacket(this.action, this.motor, this.rLimit, this.fLimit, this.mode);
+  DataPacket(this.stepperAction, this.motor, this.rLimit, this.fLimit, this.mode);
 
   factory DataPacket.fromBytes(List<int> bytes) {
-    String action = utf8.decode(bytes.sublist(0, 10));
+    String stepperAction = utf8.decode(bytes.sublist(0, 10));
     String motor = utf8.decode(bytes.sublist(10, 20));
     bool rLimit = bytes[20] == 1;
     bool fLimit = bytes[21] == 1;
     String mode = utf8.decode(bytes.sublist(22, 32));
-    return DataPacket(action, motor, rLimit, fLimit, mode);
+    return DataPacket(stepperAction, motor, rLimit, fLimit, mode);
   }
 
   List<int> toBytes() {
-    List<int> bytes = utf8.encode(action) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
+    List<int> bytes = utf8.encode(stepperAction) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
     return bytes;
   }
 }
@@ -49,16 +49,25 @@ class _MotorControllerState extends State<MotorController> {
   Icon playIcon = const Icon(Icons.play_arrow_rounded, size: 30,);
   Icon pauseIcon = const Icon(Icons.pause, size: 25);
   Icon dynamicIcon = const Icon(Icons.play_arrow_rounded, size: 30,);
-  String status = 'Stopped'; // motor
-  String action = 'None';
+  String stepperStatus = 'Stopped';
+  String servoStatus = 'Stopped';
+  String stepperAction = 'None';
+  String servoAction = 'None';
+  int servoNum = 0;
   bool fLimit = false;
   bool rLimit = false;
+  Color servo1Color = const Color(0xFFFFF98D);
+  Color servo2Color = const Color(0xFFFFF98D);
+  Color servo3Color = const Color(0xFFFFF98D);
+  Icon servoIcon = const Icon(Icons.arrow_forward_ios_rounded);
+  Icon servoForward = const Icon(Icons.arrow_forward_ios_rounded);
+  Icon servoBackward = const Icon(Icons.arrow_back_ios_new_rounded);
 
 
   @override
   void initState() {
     super.initState();
-    checkBluetoothStatus();
+    // checkBluetoothStatus();
   }
   void checkBluetoothStatus() async {
     FlutterBlue flutterBlue = FlutterBlue.instance;
@@ -130,9 +139,8 @@ class _MotorControllerState extends State<MotorController> {
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Container(
-              // TODO: Indicator text box
               width: x,
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
@@ -140,7 +148,11 @@ class _MotorControllerState extends State<MotorController> {
                   width: 1.5, // Customize border width
                 ),
               ),
-              child: Center(child: Text('Status: $status\nAction: $action')),
+              child: Center(
+                child: Text('Stepper Status: $stepperStatus\nStepper Action: $stepperAction\n\nServo Status: $servoStatus\nServo Action: $servoAction',
+                style: GoogleFonts.poppins(textStyle: TextStyle(fontSize: x*0.04)),
+                textAlign: TextAlign.center,),
+              ),
             ),
             Padding(
               padding: EdgeInsets.symmetric(vertical: y*0.02),
@@ -149,7 +161,7 @@ class _MotorControllerState extends State<MotorController> {
                 children: [
                   Row(
                     children: [
-                      const Text('Auto'),
+                      Text('Auto', style: GoogleFonts.poppins(textStyle: TextStyle(fontSize: x*0.04),)),
                       Switch(
                         value: isManual,
                         onChanged: (value) {
@@ -158,16 +170,14 @@ class _MotorControllerState extends State<MotorController> {
                           });
                           if(isManual){
                             // TODO: Manual mode
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
-                            sendData(data);
+
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                               content: Text('Manual Mode'),
                               duration: Duration(seconds: 1),
                             ));
                           } else {
                             // TODO: Auto mode
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
-                            sendData(data);
+
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                               content: Text('Auto Mode'),
                               duration: Duration(seconds: 1),
@@ -175,13 +185,13 @@ class _MotorControllerState extends State<MotorController> {
                           }
                         },
                       ),
-                      const Text('Manual'),
+                      Text('Manual', style: GoogleFonts.poppins(textStyle: TextStyle(fontSize: x*0.04),)),
                     ],
                   ),
 
                   Container(
-                    width: 20,
-                    height: 20,
+                    width: 25,
+                    height: 25,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: circleColor,
@@ -196,118 +206,253 @@ class _MotorControllerState extends State<MotorController> {
                 Column(
                   children: [
                     Container(
-                      height: y*0.4,
+                      height: y*0.15,
                     ),
                     GestureDetector(
                       onLongPressStart: rLimit ? null : (details) {
-                        if(isManual && status == 'Started'){
+                        if(isManual && stepperStatus == 'Started'){
                           setState(() {
-                            action = 'Reverse';
+                            stepperAction = 'Reverse';
                             fLimit = false;
+                            circleColor = Colors.orange;
                           });
-                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
-                          sendData(data);
+                        //   TODO reverse long press start
                         }
                       },
                       onLongPressEnd: rLimit ? null : (details) {
-                        if(isManual && status == 'Started'){
+                        if(isManual && stepperStatus == 'Started'){
                           setState(() {
-                            action = 'None';
+                            circleColor = Colors.green;
+                            stepperAction = 'None';
                           });
-                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
-                          sendData(data);
+                          //   TODO reverse long press end
                         }
                       },
-                      child: FloatingActionButton(
-                        backgroundColor: rLimit ? Colors.grey[400]: Colors.blueGrey[300],
-                        disabledElevation: 0,
-                        onPressed: rLimit ? null : () {
-                          if(!isManual && status == 'Started'){
-                            setState(() {
-                              action = 'Reverse';
-                              fLimit = false;
-                            });
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
-                            sendData(data);
-                          }
-                        },
-                        child: Icon(Icons.arrow_upward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
+                      child: SizedBox(
+                        width: x*0.16,
+                        child: FittedBox(
+                          child: FloatingActionButton(
+                            backgroundColor: rLimit ? Colors.grey[400]: Colors.blueGrey[300],
+                            disabledElevation: 0,
+                            onPressed: rLimit ? null : () {
+                              if(!isManual && stepperStatus == 'Started'){
+                                setState(() {
+                                  circleColor = Colors.orange;
+                                  stepperAction = 'Reverse';
+                                  fLimit = false;
+                                });
+                                //   TODO reverse press
+                              }
+                            },
+                            child: Icon(Icons.arrow_upward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20,),
-                    FloatingActionButton(
-                        backgroundColor: Colors.blueGrey[300],
-                        onPressed: () {
-                          setState(() {
-                            if(status == 'Started'){
-                              dynamicIcon = playIcon;
-                              status = 'Stopped';
-                              action = 'None';
-                              circleColor = Colors.yellow;
-                            } else if(status == 'Stopped'){
-                              dynamicIcon = pauseIcon;
-                              status = 'Started';
-                              circleColor = Colors.green;
-                            }
-                          });
-                          var mode = '';
-                          if (isManual){
-                            mode = 'Manual';
-                          } else {
-                            mode = 'Auto';
-                          }
-                          if(status == 'Started'){
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, mode);
-                            sendData(data);
-                          } else if(status == 'Stopped'){
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, mode);
-                            sendData(data);
-                          }
+                    SizedBox(
+                      width: x*0.16,
+                      child: FittedBox(
+                        child: FloatingActionButton(
+                            backgroundColor: Colors.blueGrey[300],
+                            onPressed: () {
+                              setState(() {
+                                if(stepperStatus == 'Started'){
+                                  dynamicIcon = playIcon;
+                                  stepperStatus = 'Stopped';
+                                  stepperAction = 'None';
+                                  circleColor = Colors.yellow;
+                                } else if(stepperStatus == 'Stopped'){
+                                  dynamicIcon = pauseIcon;
+                                  stepperStatus = 'Started';
+                                  servoNum = 0;
+                                  servoStatus = 'Stopped';
+                                  servoAction = 'None';
+                                  servo1Color = servo2Color = servo3Color = const Color(0xFFFFF98D);
+                                  circleColor = Colors.green;
+                                }
+                              });
+                              // var mode = '';
+                              if (isManual){
+                                // mode = 'Manual';
+                              } else {
+                                // mode = 'Auto';
+                              }
+                              if(stepperStatus == 'Started'){
+                                //   TODO stepper start
+                              } else if(stepperStatus == 'Stopped'){
+                                //   TODO stepper stop
+                              }
 
-                        },
-                        child: dynamicIcon
+                            },
+                            child: dynamicIcon
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 20,),
                     GestureDetector(
                       onLongPressStart: fLimit ? null : (details) {
-                        if(isManual && status == 'Started'){
+                        if(isManual && stepperStatus == 'Started'){
                           setState(() {
-                            action = 'Forward';
+                            circleColor = Colors.blue;
+                            stepperAction = 'Forward';
                             rLimit = false;
                           });
-                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
-                          sendData(data);
+                          //   TODO forward long press start
                         }
                       },
                       onLongPressEnd: fLimit ? null : (details) {
-                        if(isManual && status == 'Started'){
+                        if(isManual && stepperStatus == 'Started'){
                           setState(() {
-                            action = 'None';
+                            circleColor = Colors.green;
+                            stepperAction = 'None';
                           });
-                          DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Manual');
-                          sendData(data);
+                          //   TODO forward long press end
                         }
                       },
-                      child: FloatingActionButton(
-                        backgroundColor: fLimit ? Colors.grey[400]: Colors.blueGrey[300],
-                        disabledElevation: 0,
-                        onPressed: fLimit ? null : () {
-                          if(!isManual && status == 'Started'){
-                            setState(() {
-                              action = 'Forward';
-                              rLimit = false;
-                            });
-                            DataPacket data = DataPacket(action, status, rLimit, fLimit, 'Auto');
-                            sendData(data);
-                          }
-                        },
-                        child: Icon(Icons.arrow_downward_rounded, color: fLimit ? Colors.grey[700]:Colors.black,),
+                      child: SizedBox(
+                        width: x*0.16,
+                        child: FittedBox(
+                          child: FloatingActionButton(
+                            backgroundColor: fLimit ? Colors.grey[400]: Colors.blueGrey[300],
+                            disabledElevation: 0,
+                            onPressed: fLimit ? null : () {
+                              if(!isManual && stepperStatus == 'Started'){
+                                setState(() {
+                                  circleColor = Colors.blue;
+                                  stepperAction = 'Forward';
+                                  rLimit = false;
+                                });
+
+                                //   TODO forward press
+                              }
+                            },
+                            child: Icon(Icons.arrow_downward_rounded, color: fLimit ? Colors.grey[700]:Colors.black,),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 )
               ],
-            )
+            ),
+            Container(
+              height: y*0.03,
+            ),
+            const Row(
+              children: [
+                Expanded(
+                  child: Divider(
+                    color: Colors.grey,
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10.0),
+                  child: Text('Servo Motors'),
+                ),
+                Expanded(
+                  child: Divider(
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              height: y*0.03,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                FloatingActionButton(
+                    onPressed: (){
+                      if(stepperStatus == 'Stopped'){
+                        setState(() {
+                          if (servo1Color == Colors.blueGrey[300]) {
+                            servoNum--;
+                            if (servoNum == 0) {
+                              servoAction = 'None';
+                            }
+                            servoStatus = 'Servo 1 Stopped';
+                            servo1Color = const Color(0xFFFFF98D);
+                          } else {
+                            servoNum++;
+                            servoStatus = 'Servo 1 Started';
+                            servo1Color = Colors.blueGrey[300]!;
+                          }
+                        });
+                      }
+                    },
+                    backgroundColor: servo1Color,
+                    splashColor: Colors.transparent,
+                    child: Text('1', style: TextStyle(fontSize: x*0.045),)
+                ),
+                FloatingActionButton(
+                    onPressed: (){
+                      if(stepperStatus == 'Stopped'){
+                      setState(() {
+                        if (servo2Color == Colors.blueGrey[300]) {
+                          servoNum--;
+                          if (servoNum == 0) {
+                            servoAction = 'None';
+                          }
+                          servoStatus = 'Servo 2 Stopped';
+                          servo2Color = const Color(0xFFFFF98D);
+                        } else {
+                          servoNum++;
+                          servoStatus = 'Servo 2 Started';
+                          servo2Color = Colors.blueGrey[300]!;
+                        }
+                      });
+                    }
+                    },
+                    backgroundColor: servo2Color,
+                    splashColor: Colors.transparent,
+                    child: Text('2', style: TextStyle(fontSize: x*0.045),)
+                ),
+                FloatingActionButton(
+                    onPressed: (){
+                      if(stepperStatus == 'Stopped'){
+                        setState(() {
+                          if (servo3Color == Colors.blueGrey[300]) {
+                            servoNum--;
+                            if (servoNum == 0) {
+                              servoAction = 'None';
+                            }
+                            servoStatus = 'Servo 3 Stopped';
+                            servo3Color = const Color(0xFFFFF98D);
+                          } else {
+                            servoNum++;
+                            servoStatus = 'Servo 3 Started';
+                            servo3Color = Colors.blueGrey[300]!;
+                          }
+                        });
+                      }
+                    },
+                    backgroundColor: servo3Color,
+                    splashColor: Colors.transparent,
+
+                    child: Text('3', style: TextStyle(fontSize: x*0.045),)
+                ),
+                const SizedBox(width: 15,),
+                FloatingActionButton(
+                  backgroundColor: Colors.blueGrey[300],
+                    onPressed: (){
+                      if(servoNum > 0){
+                        setState(() {
+                          if(servoIcon == servoForward){
+                            servoAction = 'Backward';
+                            servoIcon = servoBackward;
+                          } else {
+                            servoAction = 'Forward';
+                            servoIcon = servoForward;
+                          }
+                        });
+                      }
+                    },
+                    child: servoIcon)
+              ],
+            ),
+
           ],
         ),
       ),
@@ -343,8 +488,8 @@ class _MotorControllerState extends State<MotorController> {
             characteristic.value.listen((value) {
               DataPacket receivedData = DataPacket.fromBytes(value);
               setState(() {
-                action = receivedData.action;
-                status = receivedData.motor;
+                stepperAction = receivedData.stepperAction;
+                stepperStatus = receivedData.motor;
                 if (receivedData.mode == 'manual'){
                   isManual = true;
                 } else if(receivedData.mode == 'auto') {
@@ -360,17 +505,17 @@ class _MotorControllerState extends State<MotorController> {
       }
     }
   }
-
-  void sendData(DataPacket data) {
-    characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error.toString()),
-        duration: const Duration(seconds: 1),
-      ));
-    });
-
-
-  }
+  //
+  // void sendData(DataPacket data) {
+  //   characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
+  //     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+  //       content: Text(error.toString()),
+  //       duration: const Duration(seconds: 1),
+  //     ));
+  //   });
+  //
+  //
+  // }
 
 
 
