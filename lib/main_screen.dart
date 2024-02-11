@@ -67,9 +67,10 @@ class _MotorControllerState extends State<MotorController> {
   @override
   void initState() {
     super.initState();
-    // checkBluetoothStatus();
+    checkBluetoothStatus();
   }
   void checkBluetoothStatus() async {
+    print("hello");
     FlutterBlue flutterBlue = FlutterBlue.instance;
 
     bool isBluetoothOn = await flutterBlue.isOn;
@@ -113,13 +114,19 @@ class _MotorControllerState extends State<MotorController> {
 
     flutterBlue.scanResults.listen((results) {
       // Find the ESP32_Device
-      for (var result in results) {
+      for (var result in results) { 
+        
         if (result.device.name == DEVICE_NAME) {
           device = result.device;
           connectToDevice();
         }
       }
     });
+    flutterBlue.scanResults.listen((results) {
+    for (ScanResult result in results) {
+      print('Device Name: ${result.device.name}, RSSI: ${result.rssi}');
+    }
+  });
 
   }
 
@@ -216,6 +223,7 @@ class _MotorControllerState extends State<MotorController> {
                             fLimit = false;
                             circleColor = Colors.orange;
                           });
+                           sendData(createUpdatedDataPacket());
                         //   TODO reverse long press start
                         }
                       },
@@ -225,6 +233,7 @@ class _MotorControllerState extends State<MotorController> {
                             circleColor = Colors.green;
                             stepperAction = 'None';
                           });
+                          sendData(createUpdatedDataPacket());
                           //   TODO reverse long press end
                         }
                       },
@@ -242,6 +251,7 @@ class _MotorControllerState extends State<MotorController> {
                                   fLimit = false;
                                 });
                                 //   TODO reverse press
+                                sendData(createUpdatedDataPacket());
                               }
                             },
                             child: Icon(Icons.arrow_upward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
@@ -283,6 +293,7 @@ class _MotorControllerState extends State<MotorController> {
                               } else if(stepperStatus == 'Stopped'){
                                 //   TODO stepper stop
                               }
+                              sendData(createUpdatedDataPacket());
 
                             },
                             child: dynamicIcon
@@ -299,6 +310,7 @@ class _MotorControllerState extends State<MotorController> {
                             rLimit = false;
                           });
                           //   TODO forward long press start
+                          sendData(createUpdatedDataPacket());
                         }
                       },
                       onLongPressEnd: fLimit ? null : (details) {
@@ -308,6 +320,7 @@ class _MotorControllerState extends State<MotorController> {
                             stepperAction = 'None';
                           });
                           //   TODO forward long press end
+                          sendData(createUpdatedDataPacket());
                         }
                       },
                       child: SizedBox(
@@ -323,7 +336,7 @@ class _MotorControllerState extends State<MotorController> {
                                   stepperAction = 'Forward';
                                   rLimit = false;
                                 });
-
+                                sendData(createUpdatedDataPacket());
                                 //   TODO forward press
                               }
                             },
@@ -457,8 +470,15 @@ class _MotorControllerState extends State<MotorController> {
         ),
       ),
     );
+    
+  
+  }
+  
+  DataPacket createUpdatedDataPacket() {
+    return DataPacket(stepperAction, stepperStatus, rLimit, fLimit, isManual ? 'manual' : 'auto');
   }
 
+ 
   void connectToDevice() async {
     try {
       await device.connect().then((value) {
@@ -476,47 +496,69 @@ class _MotorControllerState extends State<MotorController> {
     }
   }
   void discoverServices() async {
-    List<BluetoothService> services = await device.discoverServices();
-    for (var service in services) {
-      if (service.uuid.toString() == SERVICE_UUID) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.uuid.toString() == CHARACTERISTIC_UUID) {
-            this.characteristic = characteristic;
-            // Subscribe to notifications
-            characteristic.setNotifyValue(true);
-            // Handle received data
-            characteristic.value.listen((value) {
-              DataPacket receivedData = DataPacket.fromBytes(value);
-              setState(() {
-                stepperAction = receivedData.stepperAction;
-                stepperStatus = receivedData.motor;
-                if (receivedData.mode == 'manual'){
-                  isManual = true;
-                } else if(receivedData.mode == 'auto') {
-                  isManual = false;
-                }
-                rLimit = receivedData.rLimit;
-                fLimit = receivedData.fLimit;
-              });
-
+  List<BluetoothService> services = await device.discoverServices();
+  for (var service in services) {
+    if (service.uuid.toString() == SERVICE_UUID) {
+      for (var characteristic in service.characteristics) {
+        if (characteristic.uuid.toString() == CHARACTERISTIC_UUID) {
+          this.characteristic = characteristic;
+          // Subscribe to notifications
+          characteristic.setNotifyValue(true);
+          // Handle received data
+          characteristic.value.listen((value) {
+            DataPacket receivedData = DataPacket.fromBytes(value);
+            setState(() {
+              stepperAction = receivedData.stepperAction;
+              stepperStatus = receivedData.motor;
+              if (receivedData.mode == 'manual'){
+                isManual = true;
+              } else if(receivedData.mode == 'auto') {
+                isManual = false;
+              }
+              rLimit = receivedData.rLimit;
+              fLimit = receivedData.fLimit;
             });
-          }
+          });
+          return;
         }
       }
+
     }
   }
-  //
-  // void sendData(DataPacket data) {
-  //   characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
-  //     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-  //       content: Text(error.toString()),
-  //       duration: const Duration(seconds: 1),
-  //     ));
-  //   });
-  //
-  //
+}
+void sendData(DataPacket data) async {
+  // List<BluetoothService> services = await device.discoverServices();
+  // for (var service in services) {
+  //   if (service.uuid.toString() == SERVICE_UUID) {
+  //     for (var characteristic in service.characteristics) {
+  //       if (characteristic.uuid.toString() == CHARACTERISTIC_UUID) {
+  //         this.characteristic = characteristic;
+  //         // Subscribe to notifications
+  //         characteristic.setNotifyValue(true);
+          String val = "a";
+          List<int> b = utf8.encode(val);
+          await characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(error.toString()),
+              duration: const Duration(seconds: 1),
+            ));
+          });
+  //   //     }
+  //   //   }
+  //   // }
   // }
+    // init a sample value to send
 
-
+    // int v = 0;
+    
+    
+  // } else {
+  //   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+  //     content: Text('Bluetooth characteristic not initialized'),
+  //     duration: const Duration(seconds: 1),
+  //   ));
+  // }
+}
+  //
 
 }
