@@ -9,20 +9,30 @@ class DataPacket {
   bool rLimit;
   bool fLimit;
   String mode;
+  String servo1;
+  String servo2;
+  String servo3;
+  String servoAction;
 
-  DataPacket(this.stepperAction, this.motor, this.rLimit, this.fLimit, this.mode);
+  DataPacket(this.stepperAction, this.motor, this.rLimit, this.fLimit, this.mode, this.servo1, this.servo2, this.servo3, this.servoAction);
 
   factory DataPacket.fromBytes(List<int> bytes) {
     String stepperAction = utf8.decode(bytes.sublist(0, 10));
     String motor = utf8.decode(bytes.sublist(10, 20));
     bool rLimit = bytes[20] == 1;
     bool fLimit = bytes[21] == 1;
-    String mode = utf8.decode(bytes.sublist(22, 32));
-    return DataPacket(stepperAction, motor, rLimit, fLimit, mode);
+    String mode = utf8.decode(bytes.sublist(22, bytes.length)); // Adjusted the length here
+    String s1 = 'f';
+    String s2 = 'f';
+    String s3 = 'f';
+    String ac = 'N';
+    return DataPacket(stepperAction, motor, rLimit, fLimit, mode,s1,s2,s3,ac);
   }
 
   List<int> toBytes() {
-    List<int> bytes = utf8.encode(stepperAction) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
+
+    // List<int> bytes = utf8.encode(stepperAction) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
+    List<int> bytes = utf8.encode(stepperAction[0]) + utf8.encode(motor == "Started" ? "t" : "f") + utf8.encode(rLimit ? "t":"f") + utf8.encode(fLimit ? "t":"f") + utf8.encode(mode) + utf8.encode(servo1) + utf8.encode(servo2) + utf8.encode(servo3) + utf8.encode(servoAction[0]);
     return bytes;
   }
 }
@@ -43,7 +53,7 @@ class _MotorControllerState extends State<MotorController> {
   final String DEVICE_NAME = "ESP32_Motor";
   final String SERVICE_UUID = '29b8e60c-b575-47ab-b38f-e74f676df270';
   final String CHARACTERISTIC_UUID = 'bd91b3b6-82be-480a-ace2-0f97b1b081e3';
-
+  bool isConnected = false;
   bool isManual = false; // mode
   Color circleColor = Colors.yellow;
   Icon playIcon = const Icon(Icons.play_arrow_rounded, size: 30,);
@@ -53,6 +63,9 @@ class _MotorControllerState extends State<MotorController> {
   String servoStatus = 'Stopped';
   String stepperAction = 'None';
   String servoAction = 'None';
+  String servo1 = 'f';
+  String servo2 = 'f';
+  String servo3 = 'f';
   int servoNum = 0;
   bool fLimit = false;
   bool rLimit = false;
@@ -70,7 +83,6 @@ class _MotorControllerState extends State<MotorController> {
     checkBluetoothStatus();
   }
   void checkBluetoothStatus() async {
-    print("hello");
     FlutterBlue flutterBlue = FlutterBlue.instance;
 
     bool isBluetoothOn = await flutterBlue.isOn;
@@ -103,7 +115,17 @@ class _MotorControllerState extends State<MotorController> {
   }
 
 
-  void initBlue() {
+  void initBlue() async {
+    List<BluetoothDevice> connectedDevices = await flutterBlue.connectedDevices;
+    // Get the names of connected devices
+
+    for (BluetoothDevice d in connectedDevices) {
+      if(d.name == DEVICE_NAME) {
+        device = d;
+        discoverServices();
+        return;
+      }
+    }
     flutterBlue.startScan().onError((error, stackTrace) {
       ScaffoldMessenger.of(context).showSnackBar( SnackBar(
         content: Text('Error while scanning devices!', style: GoogleFonts.poppins(textStyle: const TextStyle(color: Colors.white)),),
@@ -114,19 +136,16 @@ class _MotorControllerState extends State<MotorController> {
 
     flutterBlue.scanResults.listen((results) {
       // Find the ESP32_Device
-      for (var result in results) { 
-        
+      for (var result in results) {
+
         if (result.device.name == DEVICE_NAME) {
+          print("${result.device.name} helllooooo");
           device = result.device;
           connectToDevice();
         }
       }
     });
-    flutterBlue.scanResults.listen((results) {
-    for (ScanResult result in results) {
-      print('Device Name: ${result.device.name}, RSSI: ${result.rssi}');
-    }
-  });
+
 
   }
 
@@ -171,13 +190,12 @@ class _MotorControllerState extends State<MotorController> {
                       Text('Auto', style: GoogleFonts.poppins(textStyle: TextStyle(fontSize: x*0.04),)),
                       Switch(
                         value: isManual,
-                        onChanged: (value) {
+
+                        onChanged: stepperStatus=='Started' ? null :(value) {
                           setState(() {
                             isManual = value;
                           });
                           if(isManual){
-                            // TODO: Manual mode
-
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                               content: Text('Manual Mode'),
                               duration: Duration(seconds: 1),
@@ -386,9 +404,11 @@ class _MotorControllerState extends State<MotorController> {
                               servoAction = 'None';
                             }
                             servoStatus = 'Servo 1 Stopped';
+                            servo1 = 'f';
                             servo1Color = const Color(0xFFFFF98D);
                           } else {
                             servoNum++;
+                            servo1 = 't';
                             servoStatus = 'Servo 1 Started';
                             servo1Color = Colors.blueGrey[300]!;
                           }
@@ -409,9 +429,11 @@ class _MotorControllerState extends State<MotorController> {
                             servoAction = 'None';
                           }
                           servoStatus = 'Servo 2 Stopped';
+                          servo2='f';
                           servo2Color = const Color(0xFFFFF98D);
                         } else {
                           servoNum++;
+                          servo2='t';
                           servoStatus = 'Servo 2 Started';
                           servo2Color = Colors.blueGrey[300]!;
                         }
@@ -432,9 +454,11 @@ class _MotorControllerState extends State<MotorController> {
                               servoAction = 'None';
                             }
                             servoStatus = 'Servo 3 Stopped';
+                            servo3 = 'f';
                             servo3Color = const Color(0xFFFFF98D);
                           } else {
                             servoNum++;
+                            servo3 = 't';
                             servoStatus = 'Servo 3 Started';
                             servo3Color = Colors.blueGrey[300]!;
                           }
@@ -475,33 +499,43 @@ class _MotorControllerState extends State<MotorController> {
   }
   
   DataPacket createUpdatedDataPacket() {
-    return DataPacket(stepperAction, stepperStatus, rLimit, fLimit, isManual ? 'manual' : 'auto');
+    return DataPacket(stepperAction, stepperStatus, rLimit, fLimit, isManual ? 'm' : 'a', servo1, servo2, servo3, servoAction);
   }
 
- 
+
   void connectToDevice() async {
     try {
+        // If the device is already connected, directly call discoverServices
+
+
       await device.connect().then((value) {
-        ScaffoldMessenger.of(context).showSnackBar( SnackBar(
+        // this.isConnected = true;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Successfully Connected to $DEVICE_NAME'),
           duration: const Duration(seconds: 1),
         ));
       });
       discoverServices();
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar( SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Error occur while connecting to $DEVICE_NAME'),
         duration: const Duration(seconds: 1),
       ));
+      print(error.toString());
     }
   }
+
   void discoverServices() async {
+    print("Muneer Pagal");
   List<BluetoothService> services = await device.discoverServices();
   for (var service in services) {
     if (service.uuid.toString() == SERVICE_UUID) {
+      print( "${service.uuid.toString()} Service UUID from me");
       for (var characteristic in service.characteristics) {
         if (characteristic.uuid.toString() == CHARACTERISTIC_UUID) {
+        print("${characteristic.uuid.toString()} my Characteries");
           this.characteristic = characteristic;
+          print("${this.characteristic} assigned");
           // Subscribe to notifications
           characteristic.setNotifyValue(true);
           // Handle received data
@@ -519,7 +553,7 @@ class _MotorControllerState extends State<MotorController> {
               fLimit = receivedData.fLimit;
             });
           });
-          return;
+
         }
       }
 
@@ -535,8 +569,6 @@ void sendData(DataPacket data) async {
   //         this.characteristic = characteristic;
   //         // Subscribe to notifications
   //         characteristic.setNotifyValue(true);
-          String val = "a";
-          List<int> b = utf8.encode(val);
           await characteristic.write(data.toBytes(), withoutResponse: true).onError((error, stackTrace) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(error.toString()),
