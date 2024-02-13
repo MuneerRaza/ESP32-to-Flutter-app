@@ -234,18 +234,18 @@ class _MotorControllerState extends State<MotorController> {
                       height: y*0.15,
                     ),
                     GestureDetector(
-                      onLongPressStart: rLimit ? null : (details) {
+                      onLongPressStart: fLimit ? null : (details) {
                         if(isManual && stepperStatus == 'Started'){
                           setState(() {
-                            stepperAction = 'Reverse';
-                            fLimit = false;
+                            stepperAction = 'Forward';
+                            rLimit = false;
                             circleColor = Colors.orange;
                           });
                            sendData(createUpdatedDataPacket());
                         //   TODO reverse long press start
                         }
                       },
-                      onLongPressEnd: rLimit ? null : (details) {
+                      onLongPressEnd: fLimit ? null : (details) {
                         if(isManual && stepperStatus == 'Started'){
                           setState(() {
                             circleColor = Colors.green;
@@ -259,20 +259,20 @@ class _MotorControllerState extends State<MotorController> {
                         width: x*0.16,
                         child: FittedBox(
                           child: FloatingActionButton(
-                            backgroundColor: rLimit ? Colors.grey[400]: Colors.blueGrey[300],
+                            backgroundColor: fLimit ? Colors.grey[400]: Colors.blueGrey[300],
                             disabledElevation: 0,
-                            onPressed: rLimit ? null : () {
+                            onPressed: fLimit ? null : () {
                               if(!isManual && stepperStatus == 'Started'){
                                 setState(() {
                                   circleColor = Colors.orange;
-                                  stepperAction = 'Reverse';
-                                  fLimit = false;
+                                  stepperAction = 'Forward';
+                                  rLimit = false;
                                 });
                                 //   TODO reverse press
                                 sendData(createUpdatedDataPacket());
                               }
                             },
-                            child: Icon(Icons.arrow_upward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
+                            child: Icon(Icons.arrow_upward_rounded, color: fLimit ? Colors.grey[700]:Colors.black,),
                           ),
                         ),
                       ),
@@ -320,18 +320,18 @@ class _MotorControllerState extends State<MotorController> {
                     ),
                     const SizedBox(height: 20,),
                     GestureDetector(
-                      onLongPressStart: fLimit ? null : (details) {
+                      onLongPressStart: rLimit ? null : (details) {
                         if(isManual && stepperStatus == 'Started'){
                           setState(() {
                             circleColor = Colors.blue;
-                            stepperAction = 'Forward';
-                            rLimit = false;
+                            stepperAction = 'Reverse';
+                            fLimit = false;
                           });
                           //   TODO forward long press start
                           sendData(createUpdatedDataPacket());
                         }
                       },
-                      onLongPressEnd: fLimit ? null : (details) {
+                      onLongPressEnd: rLimit ? null : (details) {
                         if(isManual && stepperStatus == 'Started'){
                           setState(() {
                             circleColor = Colors.green;
@@ -345,20 +345,20 @@ class _MotorControllerState extends State<MotorController> {
                         width: x*0.16,
                         child: FittedBox(
                           child: FloatingActionButton(
-                            backgroundColor: fLimit ? Colors.grey[400]: Colors.blueGrey[300],
+                            backgroundColor: rLimit ? Colors.grey[400]: Colors.blueGrey[300],
                             disabledElevation: 0,
-                            onPressed: fLimit ? null : () {
+                            onPressed: rLimit ? null : () {
                               if(!isManual && stepperStatus == 'Started'){
                                 setState(() {
                                   circleColor = Colors.blue;
-                                  stepperAction = 'Forward';
-                                  rLimit = false;
+                                  stepperAction = 'Reverse';
+                                  fLimit = false;
                                 });
                                 sendData(createUpdatedDataPacket());
                                 //   TODO forward press
                               }
                             },
-                            child: Icon(Icons.arrow_downward_rounded, color: fLimit ? Colors.grey[700]:Colors.black,),
+                            child: Icon(Icons.arrow_downward_rounded, color: rLimit ? Colors.grey[700]:Colors.black,),
                           ),
                         ),
                       ),
@@ -368,7 +368,7 @@ class _MotorControllerState extends State<MotorController> {
               ],
             ),
             Container(
-              height: y*0.03,
+              height: y*0.01,
             ),
             const Row(
               children: [
@@ -389,7 +389,7 @@ class _MotorControllerState extends State<MotorController> {
               ],
             ),
             Container(
-              height: y*0.03,
+              height: y*0.01,
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
