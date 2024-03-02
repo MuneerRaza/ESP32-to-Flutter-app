@@ -414,6 +414,7 @@ class _MotorControllerState extends State<MotorController> {
                           }
                         });
                       }
+                      sendData(createUpdatedDataPacket());
                     },
                     backgroundColor: servo1Color,
                     splashColor: Colors.transparent,
@@ -439,6 +440,7 @@ class _MotorControllerState extends State<MotorController> {
                         }
                       });
                     }
+                    sendData(createUpdatedDataPacket());
                     },
                     backgroundColor: servo2Color,
                     splashColor: Colors.transparent,
@@ -464,6 +466,7 @@ class _MotorControllerState extends State<MotorController> {
                           }
                         });
                       }
+                      sendData(createUpdatedDataPacket());
                     },
                     backgroundColor: servo3Color,
                     splashColor: Colors.transparent,
@@ -485,6 +488,7 @@ class _MotorControllerState extends State<MotorController> {
                           }
                         });
                       }
+                      sendData(createUpdatedDataPacket());
                     },
                     child: servoIcon)
               ],
@@ -505,6 +509,7 @@ class _MotorControllerState extends State<MotorController> {
 
   void connectToDevice() async {
     try {
+      print('Hello Connecting');
         // If the device is already connected, directly call discoverServices
 
 
