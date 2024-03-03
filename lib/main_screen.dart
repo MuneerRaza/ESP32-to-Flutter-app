@@ -16,26 +16,26 @@ class DataPacket {
 
   DataPacket(this.stepperAction, this.motor, this.rLimit, this.fLimit, this.mode, this.servo1, this.servo2, this.servo3, this.servoAction);
 
-  factory DataPacket.fromBytes(List<int> bytes) {
-    String stepperAction = utf8.decode(bytes.sublist(0, 10));
-    String motor = utf8.decode(bytes.sublist(10, 20));
-    bool rLimit = bytes[20] == 1;
-    bool fLimit = bytes[21] == 1;
-    String mode = utf8.decode(bytes.sublist(22, bytes.length)); // Adjusted the length here
-    String s1 = 'f';
-    String s2 = 'f';
-    String s3 = 'f';
-    String ac = 'N';
-    return DataPacket(stepperAction, motor, rLimit, fLimit, mode,s1,s2,s3,ac);
-  }
+  // factory DataPacket.fromBytes(List<int> bytes) {
+  //   String stepperAction = 'N';
+  //   String motor = "Stopped";
+  //   bool rLimit = bytes[20] == 1;
+  //   bool fLimit = bytes[21] == 1;
+  //   String mode = utf8.decode(bytes.sublist(22, bytes.length)); // Adjusted the length here
+  //   String s1 = 'f';
+  //   String s2 = 'f';
+  //   String s3 = 'f';
+  //   String ac = 'N';
+  //   return DataPacket(stepperAction, motor, rLimit, fLimit, mode,s1,s2,s3,ac);
+  // }
 
   List<int> toBytes() {
-
-    // List<int> bytes = utf8.encode(stepperAction) + utf8.encode(motor) + [rLimit ? 1 : 0, fLimit ? 1 : 0] + utf8.encode(mode);
     List<int> bytes = utf8.encode(stepperAction[0]) + utf8.encode(motor == "Started" ? "t" : "f") + utf8.encode(rLimit ? "t":"f") + utf8.encode(fLimit ? "t":"f") + utf8.encode(mode) + utf8.encode(servo1) + utf8.encode(servo2) + utf8.encode(servo3) + utf8.encode(servoAction[0]);
     return bytes;
   }
 }
+
+
 
 class MotorController extends StatefulWidget {
   const MotorController({super.key});
@@ -76,12 +76,19 @@ class _MotorControllerState extends State<MotorController> {
   Icon servoForward = const Icon(Icons.arrow_forward_ios_rounded);
   Icon servoBackward = const Icon(Icons.arrow_back_ios_new_rounded);
 
+  Color connectColor = Colors.cyan;
+
 
   @override
-  void initState() {
-    super.initState();
-    checkBluetoothStatus();
+  void dispose(){
+    super.dispose();
+    if (isConnected){
+      sendExitString();
+      device.disconnect();
+      isConnected = false;
+    }
   }
+
   void checkBluetoothStatus() async {
     FlutterBlue flutterBlue = FlutterBlue.instance;
 
@@ -116,16 +123,7 @@ class _MotorControllerState extends State<MotorController> {
 
 
   void initBlue() async {
-    List<BluetoothDevice> connectedDevices = await flutterBlue.connectedDevices;
-    // Get the names of connected devices
 
-    for (BluetoothDevice d in connectedDevices) {
-      if(d.name == DEVICE_NAME) {
-        device = d;
-        discoverServices();
-        return;
-      }
-    }
     flutterBlue.startScan().onError((error, stackTrace) {
       ScaffoldMessenger.of(context).showSnackBar( SnackBar(
         content: Text('Error while scanning devices!', style: GoogleFonts.poppins(textStyle: const TextStyle(color: Colors.white)),),
@@ -141,7 +139,9 @@ class _MotorControllerState extends State<MotorController> {
         if (result.device.name == DEVICE_NAME) {
           print("${result.device.name} helllooooo");
           device = result.device;
-          connectToDevice();
+          if(!isConnected) {
+            connectToDevice();
+          }
         }
       }
     });
@@ -160,9 +160,9 @@ class _MotorControllerState extends State<MotorController> {
         backgroundColor: Colors.blueGrey,
       ),
       body: Padding(
-        padding: EdgeInsets.symmetric(vertical: y*0.02, horizontal: x*0.05),
+        padding: EdgeInsets.symmetric(vertical: y*0.01, horizontal: x*0.04),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
               width: x,
@@ -231,8 +231,36 @@ class _MotorControllerState extends State<MotorController> {
                 Column(
                   children: [
                     Container(
-                      height: y*0.15,
+                      height: y*0.01,
                     ),
+                    SizedBox(
+                      width: x*0.15,
+                      child: FittedBox(
+                        child: FloatingActionButton(onPressed: (){
+                          setState(() {
+                            if (isConnected){
+                              connectColor = Colors.greenAccent;
+                            }
+                            else{
+                              connectColor = Colors.cyan;
+                            }
+                          });
+                          if (isConnected){
+                            sendExitString();
+                            device.disconnect();
+                            setState(() {
+                              isConnected = false;
+                            });
+
+                          }else{
+                          checkBluetoothStatus();
+                          }
+                        }, child: const Icon(Icons.bluetooth_audio,),
+                          backgroundColor: connectColor,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: y*0.03,),
                     GestureDetector(
                       onLongPressStart: fLimit ? null : (details) {
                         if(isManual && stepperStatus == 'Started'){
@@ -364,7 +392,7 @@ class _MotorControllerState extends State<MotorController> {
                       ),
                     ),
                   ],
-                )
+                ),
               ],
             ),
             Container(
@@ -498,35 +526,38 @@ class _MotorControllerState extends State<MotorController> {
         ),
       ),
     );
-    
-  
+
+
   }
-  
+
   DataPacket createUpdatedDataPacket() {
     return DataPacket(stepperAction, stepperStatus, rLimit, fLimit, isManual ? 'm' : 'a', servo1, servo2, servo3, servoAction);
   }
 
 
   void connectToDevice() async {
-    try {
-      print('Hello Connecting');
-        // If the device is already connected, directly call discoverServices
+    if(!isConnected){
+      try {
+        print('Hello Connecting');
 
-
-      await device.connect().then((value) {
-        // this.isConnected = true;
+        await device.connect().then((value) {
+          isConnected = true;
+          setState(() {
+            connectColor = Colors.greenAccent;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Successfully Connected to $DEVICE_NAME'),
+            duration: const Duration(seconds: 1),
+          ));
+        });
+        discoverServices();
+      } catch (error) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Successfully Connected to $DEVICE_NAME'),
+          content: Text(error.toString()),
           duration: const Duration(seconds: 1),
         ));
-      });
-      discoverServices();
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error occur while connecting to $DEVICE_NAME'),
-        duration: const Duration(seconds: 1),
-      ));
-      print(error.toString());
+        print(error.toString());
+      }
     }
   }
 
@@ -544,20 +575,20 @@ class _MotorControllerState extends State<MotorController> {
           // Subscribe to notifications
           characteristic.setNotifyValue(true);
           // Handle received data
-          characteristic.value.listen((value) {
-            DataPacket receivedData = DataPacket.fromBytes(value);
-            setState(() {
-              stepperAction = receivedData.stepperAction;
-              stepperStatus = receivedData.motor;
-              if (receivedData.mode == 'manual'){
-                isManual = true;
-              } else if(receivedData.mode == 'auto') {
-                isManual = false;
-              }
-              rLimit = receivedData.rLimit;
-              fLimit = receivedData.fLimit;
-            });
-          });
+          // characteristic.value.listen((value) {
+          //   DataPacket receivedData = DataPacket.fromBytes(value);
+          //   setState(() {
+          //     stepperAction = receivedData.stepperAction;
+          //     stepperStatus = receivedData.motor;
+          //     if (receivedData.mode == 'manual'){
+          //       isManual = true;
+          //     } else if(receivedData.mode == 'auto') {
+          //       isManual = false;
+          //     }
+          //     rLimit = receivedData.rLimit;
+          //     fLimit = receivedData.fLimit;
+          //   });
+          // });
 
         }
       }
@@ -565,6 +596,31 @@ class _MotorControllerState extends State<MotorController> {
     }
   }
 }
+  void sendExitString() {
+    // Define the exit string
+    String exitString = "Exit";
+
+    // Encode the exit string as UTF-8 bytes
+    List<int> exitBytes = utf8.encode(exitString);
+
+    // Send the exit bytes through characteristic write function
+    characteristic.write(exitBytes, withoutResponse: true)
+        .then((value) {
+      // Handle successful write
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Exit string sent successfully.'),
+        duration: Duration(seconds: 1),
+      ));
+    })
+        .catchError((error) {
+      // Handle error during write
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString()),
+        duration: const Duration(seconds: 1),
+      ));
+    });
+  }
+
 void sendData(DataPacket data) async {
   // List<BluetoothService> services = await device.discoverServices();
   // for (var service in services) {
@@ -587,8 +643,8 @@ void sendData(DataPacket data) async {
     // init a sample value to send
 
     // int v = 0;
-    
-    
+
+
   // } else {
   //   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
   //     content: Text('Bluetooth characteristic not initialized'),
